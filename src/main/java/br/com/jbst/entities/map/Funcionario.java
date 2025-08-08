@@ -45,6 +45,10 @@ public class Funcionario {
 	@Column(name = "rg", length = 100, nullable = false)
 	private String rg;
 	
+	//Campo 12
+	@Column(name = "funcao_certificado", length = 100, nullable = true)
+	private String funcao_certificado;
+	
 	// Campo 6
 	@Column(name = "status", length = 100, nullable = true)
 	private String status;
@@ -52,6 +56,13 @@ public class Funcionario {
 	// Campo 7
 	@Column(name = "matricula", length = 100, nullable = true)
 	private String matricula;
+	
+	@Column(name = "whatsapp_funcionario", length = 100, nullable = true)
+	private String whatsapp_funcionario;
+	
+	// Campo 7
+	@Column(name = "email_funcionario", length = 100, nullable = true)
+	private String email_funcionario;
 	
 	// Campo 8
 	@Column(name = "assinatura", nullable = true)

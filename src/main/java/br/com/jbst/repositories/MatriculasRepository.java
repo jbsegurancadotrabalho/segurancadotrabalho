@@ -1,6 +1,7 @@
 package br.com.jbst.repositories;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -45,7 +46,13 @@ public interface MatriculasRepository extends JpaRepository<Matriculas, UUID > {
     boolean existsByPessoafisicaAndTurmas(PessoaFisica pessoafisica, Turmas turmas);
 
     boolean existsByTurmasAndPessoafisica_Cpf(Turmas turma, String cpf);
+   
+    @Query("SELECT m FROM Matriculas m WHERE m.funcionario.id = :idFuncionario AND m.turmas.idTurmas = :idTurmas")
+    Optional<Matriculas> findByFuncionarioAndTurma(UUID idFuncionario, UUID idTurmas);
 
-}
+   
+ }
+
+
 
 

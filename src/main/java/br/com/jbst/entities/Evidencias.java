@@ -45,7 +45,7 @@ private byte[] inserir_evidencias;
 
 //Campo 6
 @ManyToOne 
-@JoinColumn(name = "idmatriculas", nullable = false)
+@JoinColumn(name = "idmatricula", nullable = true)
 private Matriculas matriculas;
 
 }

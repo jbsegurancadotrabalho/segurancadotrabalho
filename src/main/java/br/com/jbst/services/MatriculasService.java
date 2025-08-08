@@ -1,28 +1,32 @@
 package br.com.jbst.services;
-import java.util.ArrayList;
-
-
 import java.rmi.NotBoundException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 import javax.security.auth.login.AccountNotFoundException;
 
-import org.apache.commons.logging.Log;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.TypeToken;
-import org.springframework.beans.FatalBeanException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.crossstore.ChangeSetPersister.NotFoundException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import java.io.ByteArrayInputStream;
 
 import br.com.jbst.DTO.GetMatriculaDTO;
+import br.com.jbst.DTO.MailSenderDto;
+import br.com.jbst.DTO.SendMessageZapDTO;
 import br.com.jbst.MatriculasDTO.AdicionarUsuariosMatriculaDTO;
 import br.com.jbst.MatriculasDTO.GetMatriculaFaturamentoPfDTO;
 import br.com.jbst.MatriculasDTO.GetMatriculaFaturamentoPjDTO;
@@ -34,13 +38,15 @@ import br.com.jbst.MatriculasDTO.PutMatriculaCliente;
 import br.com.jbst.MatriculasDTO.PutMatriculaFaturamentoPfDTO;
 import br.com.jbst.MatriculasDTO.PutMatriculaFaturamentoPjDTO;
 import br.com.jbst.MatriculasDTO.PutMatriculaPedidosDTO;
+import br.com.jbst.components.DataUtils;
+import br.com.jbst.components.MailSenderComponent;
+import br.com.jbst.components.ZApiSenderComponent;
 import br.com.jbst.entities.Faturamento;
 import br.com.jbst.entities.FaturamentoPf;
 import br.com.jbst.entities.Matriculas;
 import br.com.jbst.entities.Pedidos;
-import br.com.jbst.entities.Usuario;
 import br.com.jbst.entities.Turmas;
-import br.com.jbst.entities.map.Empresa;
+import br.com.jbst.entities.Usuario;
 import br.com.jbst.entities.map.Funcionario;
 import br.com.jbst.entities.map.PessoaFisica;
 import br.com.jbst.repositories.FaturamentoRepository;
@@ -52,10 +58,6 @@ import br.com.jbst.repositories.PessoaFisicaRepository;
 import br.com.jbst.repositories.TurmasRepository;
 import br.com.jbst.repositories.UsuarioRepository;
 import jakarta.transaction.Transactional;
-import br.com.jbst.entities.map.Funcionario;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 
@@ -97,108 +99,66 @@ public class MatriculasService {
 	@Autowired
 	ModelMapper modelMapper;
 	
-		@Transactional
-		public GetMatriculaFaturamentoPjDTO criarMatriculaFaturamentoPj(PostMatriculaFaturamentoPjDTO dto) {
-		    try {
-		        // Gere um ID para a matrícula
-		        UUID idMatricula = UUID.randomUUID();
+	@Autowired ZApiSenderComponent zApiSenderComponent;
 	
-		        // Crie uma nova instância de Matriculas e atribua o ID gerado e a data/hora de criação
-		        Matriculas matricula = new Matriculas();
-		        matricula.setIdMatricula(idMatricula);
-		        matricula.setDataHoraCriacao(Instant.now());
+	@Autowired private MailSenderComponent mailSenderComponent;
 	
-		        // Mapeie os dados do DTO para a entidade Matriculas
-		        modelMapper.map(dto, matricula);
-	
-		        // Gere um número de matrícula
-		        int numeroMatricula = gerarNumeroMatricula();
-		        matricula.setNumeroMatricula(numeroMatricula);
-	
-		        // Busque a turma no repositório
-		        Turmas turma = turmasRepository.findById(dto.getIdTurmas())
-		                .orElseThrow(() -> new NotFoundException());	      
-	
-		        // Busque o funcionário no repositório
-		        Funcionario funcionario = funcionarioRepository.findById(dto.getFuncionario())
-		                .orElseThrow(() -> new NotFoundException());
-	
-		        // Verifique se o funcionário já está matriculado nesta turma
-		        boolean funcionarioJaMatriculado = matriculasRepository.existsByFuncionarioAndTurmas(funcionario, turma);
-	
-		        if (funcionarioJaMatriculado) {
-		            throw new TurmaAlreadyExistsException("Este funcionário já está matriculado nesta turma.");
-		        }
-	
-		        // Busque o faturamento no repositório
-		        Faturamento faturamento = faturamentoRepository.findById(dto.getFaturamento())
-		                .orElseThrow(() -> new NotFoundException());
-	
-		        // Verifique se o faturamento está fechado
-		        if (faturamento.isFaturaFechada()) {
-		            throw new Exception("Não é possível criar uma matrícula com faturamento fechado.");
-		        }
-		
-		     // Busque o funcionário no repositório
-		        Funcionario funcionario1 = funcionarioRepository.findById(dto.getFuncionario())
-		                .orElseThrow(() -> new NotFoundException());
-	
-		        // Busque o faturamento no repositório
-		        Faturamento faturamento1 = faturamentoRepository.findById(dto.getFaturamento())
-		                .orElseThrow(() -> new NotFoundException());
-	
-		        // Verifique se o funcionário pertence à mesma empresa do faturamento
-		        if (!funcionario1.getEmpresa().getIdEmpresa().equals(faturamento1.getEmpresa().getIdEmpresa())) {
-		            throw new RuntimeException("O funcionário não pertence à mesma empresa do faturamento.");
-		        }
-		        
-		        Turmas turmafechada = turmasRepository.findById(dto.getIdTurmas())
-		                .orElseThrow(() -> new NotFoundException());
-		        if (turmafechada.isTurmaFechada()) {
-		            throw new RuntimeException("Não é possível criar uma matrícula em uma turma fechada.");
-		        }
-		        matricula.setTurmas(turma);
-		        matricula.setFuncionario(funcionario);
-	
-		        // Associe o faturamento à matrícula
-		        matricula.setFaturamento(faturamento);
-	
-		        // Verifique e feche a matrícula se necessário
-		        faturamento.fecharMatriculasAposDataFim();
-	
-		        // Busque o usuário no repositório
-		        Usuario usuario = usuarioRepository.findById(dto.getId())
-		                .orElseThrow(() -> new NotFoundException());
-	
-		        // Inicialize a lista matriculasUsuarios se for nula
-		        if (usuario.getMatriculas() == null) {
-		            usuario.setMatriculas(new ArrayList<>());
-		        }
-	
-		        // Adicione a matrícula ao usuário
-		        usuario.getMatriculas().add(matricula);
-	
-		        // Salve a matrícula no repositório
-		        matricula = matriculasRepository.save(matricula);
-	
-		        // Salve novamente o usuário para persistir a associação com Matriculas
-		        usuario = usuarioRepository.save(usuario);
-	
-		        // Mapeie a entidade matricula para o DTO de resposta
-		        return modelMapper.map(matricula, GetMatriculaFaturamentoPjDTO.class);
-		    } catch (NotFoundException e) {
-		        // Log ou manipule a exceção conforme necessário
-		        throw new RuntimeException("Erro ao criar matrícula com faturamento PJ. Detalhes: " + e.getMessage(), e);
-		    } catch (TurmaAlreadyExistsException e) {
-		        // Log ou manipule a exceção conforme necessário
-		        throw e;
-		    } catch (Exception e) {
-		        // Log ou manipule a exceção conforme necessário
-		        e.printStackTrace(); // Adiciona esta linha para imprimir a stack trace da exceção
-		        throw new RuntimeException("Erro ao criar matrícula com faturamento PJ. Detalhes: " + e.getMessage(), e);
-		    }
-	
-		}
+	@Transactional
+	public GetMatriculaFaturamentoPjDTO criarMatriculaFaturamentoPj(PostMatriculaFaturamentoPjDTO dto) {
+	    UUID idMatricula = UUID.randomUUID();
+
+	    // 1. Buscar e validar a turma
+	    Turmas turma = turmasRepository.findById(dto.getIdTurmas())
+	        .orElseThrow(() -> new RuntimeException("Turma não encontrada para o ID: " + dto.getIdTurmas()));
+	    if (turma.isTurmaFechada()) {
+	        throw new RuntimeException("Não é possível criar uma matrícula em uma turma fechada.");
+	    }
+
+	    // 2. Buscar e validar o funcionário
+	    Funcionario funcionario = funcionarioRepository.findById(dto.getFuncionario())
+	        .orElseThrow(() -> new RuntimeException("Funcionário não encontrado para o ID: " + dto.getFuncionario()));
+
+	    // 3. Verificar duplicidade de matrícula
+	    if (matriculasRepository.findByFuncionarioAndTurma(funcionario.getIdFuncionario(), turma.getIdTurmas()).isPresent()) {
+	        throw new TurmaAlreadyExistsException("Este funcionário já está matriculado nesta turma.");
+	    }
+
+	    // 4. Buscar e validar o faturamento
+	    Faturamento faturamento = faturamentoRepository.findById(dto.getFaturamento())
+	        .orElseThrow(() -> new RuntimeException("Faturamento não encontrado para o ID: " + dto.getFaturamento()));
+	    if (faturamento.isFaturaFechada()) {
+	        throw new RuntimeException("Não é possível criar uma matrícula com faturamento fechado.");
+	    }
+	    if (!funcionario.getEmpresa().getIdEmpresa().equals(faturamento.getEmpresa().getIdEmpresa())) {
+	        throw new RuntimeException("O funcionário não pertence à mesma empresa do faturamento.");
+	    }
+
+	    // 5. Criar a matrícula
+	    Matriculas matricula = new Matriculas();
+	    matricula.setIdMatricula(idMatricula);
+	    matricula.setDataHoraCriacao(Instant.now());
+	    matricula.setNumeroMatricula(gerarNumeroMatricula());
+	    modelMapper.map(dto, matricula);
+	    matricula.setTurmas(turma);
+	    matricula.setFuncionario(funcionario);
+	    matricula.setFaturamento(faturamento);
+	    Usuario usuario = usuarioRepository.findById(dto.getId())
+	        .orElseThrow(() -> new RuntimeException("Usuário não encontrado para o ID: " + dto.getId()));
+	    if (usuario.getMatriculas() == null) {
+	        usuario.setMatriculas(new ArrayList<>());
+	    }
+	    usuario.getMatriculas().add(matricula);
+
+	    // 7. Salvar matrícula e usuário
+	    matricula = matriculasRepository.save(matricula);
+	    usuarioRepository.save(usuario);
+
+	    // 8. Enviar mensagem via WhatsApp
+	    enviarMensagemWhatsapp(matricula);
+
+	    // 9. Retornar o DTO da matrícula criada
+	    return modelMapper.map(matricula, GetMatriculaFaturamentoPjDTO.class);
+	}
 
 
 	public class TurmaAlreadyExistsException extends RuntimeException {
@@ -240,6 +200,7 @@ public class MatriculasService {
                 .orElseThrow(() -> new NotFoundException());
 
 		matriculasRepository.save(matriculas);
+        enviarMensagemWhatsapp(matriculas);
 		return modelMapper.map(matriculas, GetMatriculaFaturamentoPjDTO.class);
 	
 		} catch (NoSuchElementException e) {
@@ -471,6 +432,8 @@ public class MatriculasService {
 
 	            // Salve novamente a matrícula para persistir a associação com usuários
 	            matricula = matriculasRepository.save(matricula);
+		        enviarMensagemWhatsapp(matricula);
+
 	        } else {
 	            throw new RuntimeException("Pedido não encontrado");
 	        }
@@ -504,6 +467,7 @@ public class MatriculasService {
 	        }
 	        // Salve a matrícula para persistir as alterações
 	        matricula = matriculasRepository.save(matricula);
+	        enviarMensagemWhatsapp(matricula);
 
 	        // Converta a entidade Matriculas para DTO e retorne
 	        return modelMapper.map(matricula, GetMatriculaPedidosDTO.class);
@@ -531,6 +495,16 @@ public class MatriculasService {
 
 			throw new RuntimeException("Matricula não encontrada"); // Lançar exceção quando não encontrada
 		}
+	}
+	
+	public byte[] comprimirImagem(byte[] imagemBytes) throws IOException {
+	    BufferedImage imagem = ImageIO.read(new ByteArrayInputStream(imagemBytes));
+	    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+	    ImageIO.write(imagem, "jpg", baos);
+	    baos.flush();
+	    byte[] imagemComprimida = baos.toByteArray();
+	    baos.close();
+	    return imagemComprimida;
 	}
 
 	private int gerarNumeroMatricula() {
@@ -610,6 +584,8 @@ public class MatriculasService {
 			Matriculas matriculas = registro.get();
 			modelMapper.map(dto, matriculas); // Utiliza o ModelMapper para mapear os dados do DTO para a entidade
 			matriculasRepository.save(matriculas);
+	        enviarMensagemWhatsapp(matriculas);
+
 			return modelMapper.map(matriculas,  PutMatriculaCliente.class);
 		
 			} catch (NoSuchElementException e) {
@@ -621,5 +597,99 @@ public class MatriculasService {
 			   }
 			
 			}
+		
+		
 
+
+		private void enviarMensagemWhatsapp(Matriculas matricula) {
+		    Funcionario funcionario = matricula.getFuncionario();
+		    Turmas turma = matricula.getTurmas();
+
+		    if (funcionario != null && funcionario.getWhatsapp_funcionario() != null && turma != null) {
+		        String numero = funcionario.getWhatsapp_funcionario().replaceAll("[^0-9]", "");
+		        if (!numero.startsWith("55")) {
+		            numero = "55" + numero;
+		        }
+
+		        String enderecoRJ = "Rua Moncorvo Filho, 99 - Loja - Centro - Rio de Janeiro - RJ - Brasil";
+		        String horarioRJ = "08:00 às 17:00";
+		        String enderecoSP = "Rua Siqueira Bueno, 1321, Belém - São Paulo - SP - Brasil";
+		        String horarioSP = "09:00 às 17:00";
+
+		        String linkCurso = "http://jbseguranca.s3-website.us-east-2.amazonaws.com/fazer-curso-ead/" + matricula.getIdMatricula();
+		        String linkAssinatura = "http://jbseguranca.s3-website.us-east-2.amazonaws.com/assinatura-funcionario/" + funcionario.getIdFuncionario();
+		        UUID idCurso = turma.getCurso() != null ? turma.getCurso().getIdcurso() : null;
+		        String linkAvaliacao = idCurso != null
+		                ? "http://jbseguranca.s3-website.us-east-2.amazonaws.com/responder-avaliacao/" + idCurso
+		                : "Link de avaliação indisponível";
+
+		        String dataInicioFormatada = turma.getDatainicio() != null ? DataUtils.formatarDataIsoParaPortugues(turma.getDatainicio().toString()) : "Não informado";
+		        String dataFimFormatada = turma.getDatafim() != null ? DataUtils.formatarDataIsoParaPortugues(turma.getDatafim().toString()) : "Não informado";
+
+		        // Eliminar dias duplicados
+		        Set<String> diasUnicos = new LinkedHashSet<>();
+		        if (turma.getPrimeirodia() != null && !turma.getPrimeirodia().isBlank()) diasUnicos.add(turma.getPrimeirodia());
+		        if (turma.getSegundodia() != null && !turma.getSegundodia().isBlank()) diasUnicos.add(turma.getSegundodia());
+		        if (turma.getTerceirodia() != null && !turma.getTerceirodia().isBlank()) diasUnicos.add(turma.getTerceirodia());
+		        if (turma.getQuartodia() != null && !turma.getQuartodia().isBlank()) diasUnicos.add(turma.getQuartodia());
+		        if (turma.getQuintodia() != null && !turma.getQuintodia().isBlank()) diasUnicos.add(turma.getQuintodia());
+
+		        String diasFormatados = String.join(" ", diasUnicos);
+
+		        String mensagem = String.format("""
+		            Olá %s! Sua matrícula nº %d - Turma nº %d foi registrada com sucesso.
+
+		            📚 Curso: %s
+		            📝 Tipo: %s | Nível: %s
+		            🕒 Carga Horária: %s
+		            📅 Período: %s a %s
+		            🗓️ Dias: %s
+		            📝 Observações: %s
+
+		            Endereços das Unidades:
+		            🏢 Rio de Janeiro: %s (Horário: %s)
+		            🏢 São Paulo: %s (Horário: %s)
+
+		            📝 Realize sua assinatura no link:
+		            %s
+
+		            📚 Acesse o curso no link:
+		            %s
+
+		            📝 Responda sua avaliação no link:
+		            %s
+
+		            ⚠️ Compareça de calça, camisa e sapato ou bota. Traga caneta e papel para anotações.
+		            """,
+		            funcionario.getNome(),
+		            matricula.getNumeroMatricula(),
+		            turma.getNumeroTurma() != null ? turma.getNumeroTurma() : 0,
+		            turma.getCurso() != null ? turma.getCurso().getCurso() : "Informação indisponível",
+		            turma.getTipo() != null ? turma.getTipo() : "Informação indisponível",
+		            turma.getNivel() != null ? turma.getNivel() : "Informação indisponível",
+		            turma.getCargahoraria() != null ? turma.getCargahoraria() : "Informação indisponível",
+		            dataInicioFormatada,
+		            dataFimFormatada,
+		            diasFormatados.isBlank() ? "Dias não informados" : diasFormatados,
+		            turma.getObservacoes() != null ? turma.getObservacoes() : "Nenhuma observação",
+		            enderecoRJ, horarioRJ,
+		            enderecoSP, horarioSP,
+		            linkAssinatura,
+		            linkCurso,
+		            linkAvaliacao
+		        ).trim();
+
+		        zApiSenderComponent.sendMessage(new SendMessageZapDTO(numero, mensagem));
+
+		        if (funcionario.getEmail_funcionario() != null && !funcionario.getEmail_funcionario().isBlank()) {
+		            MailSenderDto emailDto = new MailSenderDto();
+		            emailDto.setMailTo(funcionario.getEmail_funcionario());
+		            emailDto.setSubject("Confirmação de Matrícula - JB Segurança do Trabalho");
+		            emailDto.setBody(mensagem.replace("\n", "<br>")); // HTML para e-mail
+		            mailSenderComponent.sendMessage(emailDto);
+		        }
+		    }
+		}
+
+		
 }

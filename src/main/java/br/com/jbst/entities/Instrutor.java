@@ -1,5 +1,6 @@
- package br.com.jbst.entities;
+package br.com.jbst.entities;
 import java.time.Instant;
+
 
 import java.util.List;
 import java.util.UUID;

@@ -13,6 +13,9 @@ public class GetFuncionarioDTO {
 	private String nome;
 	private String cpf;
 	private String rg;
+	private String funcao_certificado;
+	private String whatsapp_funcionario;
+	private String email_funcionario;
 	private GetEmpresaDTOs empresa;
 
 }

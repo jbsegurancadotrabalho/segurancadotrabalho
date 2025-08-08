@@ -1,5 +1,6 @@
 package br.com.jbst.controllers;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +21,9 @@ import br.com.jbst.DTO.GetTurmasDTOs;
 import br.com.jbst.DTO.PostTurmasDTO;
 import br.com.jbst.DTO.PutTurmasDTO;
 import br.com.jbst.DTO.PutTurmasInstrutor;
+import br.com.jbst.DTO.TurmasAssinaturaInstrutorDTO;
+import br.com.jbst.MatriculasDTO.DocumentoRequest;
+import br.com.jbst.services.AssinaturaImportService;
 import br.com.jbst.services.TurmasService;
 
 @RestController
@@ -27,15 +31,14 @@ import br.com.jbst.services.TurmasService;
 public class TurmasController {
 
 	
-	@Autowired
-	TurmasService turmasService;
+	@Autowired TurmasService turmasService;
+	  @Autowired private AssinaturaImportService assinaturaImportService;
 	
-	
-@PostMapping
-public ResponseEntity<GetTurmasDTO> criarTurmas(@RequestBody PostTurmasDTO dto ) throws Exception{
-		return ResponseEntity.status(HttpStatus.CREATED).body(turmasService.criarTurmas(dto));		
-	}
-
+	@PostMapping
+	public ResponseEntity<GetTurmasDTO> criarTurmaComCofre(@RequestBody PostTurmasDTO dto) throws Exception {
+        GetTurmasDTO turmaCriada = turmasService.criarTurmas(dto);
+        return ResponseEntity.ok(turmaCriada);
+    }
 
 
 @GetMapping
@@ -48,6 +51,18 @@ public  ResponseEntity<List<GetTurmasDTOs>> ConsultarTurmas() throws Exception{
 public  ResponseEntity<GetTurmasDTOs> consultarUmInstrutor(@PathVariable("id") UUID id)throws Exception{
 	return ResponseEntity.status(HttpStatus.OK).body(turmasService.consultarTurmasPorId(id));
 
+}
+
+@GetMapping("/{id}/assinaturas-instrutores")
+public ResponseEntity<TurmasAssinaturaInstrutorDTO> buscarTurmaComAssinaturasInstrutores(@PathVariable UUID id) {
+    try {
+        TurmasAssinaturaInstrutorDTO dto = turmasService.buscarTurmasPorId(id);
+        return ResponseEntity.ok(dto);
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.notFound().build();
+    } catch (Exception e) {
+        return ResponseEntity.internalServerError().build();
+    }
 }
 
 @PutMapping
@@ -100,6 +115,19 @@ public ResponseEntity<String> fecharTurma(@PathVariable UUID turmaId) {
                 .body("Erro ao fechar a turma: " + e.getMessage());
     }
 }
+
+
+@PostMapping("/{idTurma}/importar-assinaturas")
+public ResponseEntity<Void> importarAssinaturas(
+        @PathVariable("idTurma") UUID idTurma,
+        @RequestBody DocumentoRequest request) throws IOException {
+
+    assinaturaImportService.importarAssinaturasComoImagens(idTurma, request.getUuidDocumentoD4Sign());
+    return ResponseEntity.ok().build();
+}
+
+
+
 }
 
 

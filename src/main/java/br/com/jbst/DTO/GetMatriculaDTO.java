@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import br.com.jbst.DTOs.GetEvidenciasDTOs;
@@ -14,9 +16,10 @@ import br.com.jbst.config.InstantSerializer;
 import lombok.Data;
 
 @Data
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "idMatricula")
 public class GetMatriculaDTO {
 	private UUID idMatricula;
-    private Integer numeroMatricula;
+	private Integer numeroMatricula;
 	@JsonSerialize(using = InstantSerializer.class)
 	private Instant dataHoraCriacao;
 	private String venda;
@@ -25,9 +28,12 @@ public class GetMatriculaDTO {
 	private String tipo_de_pagamento;
 	private String observacoes;
 	private BigDecimal total;
-	private List <GetEvidenciasDTOs> evidencias;
+	
+	private List<GetAssinaturaAlunoDTO> assinaturaAluno;
+
+	private List<GetEvidenciasDTOs> evidencias;
 	private GetPessoaFisicaDTO pessoafisica;
 	private GetFuncionarioDTOs funcionario;
-	private GetTurmasDTO turmas;
+	private GetTurmasDTOs turmas;
 
 }

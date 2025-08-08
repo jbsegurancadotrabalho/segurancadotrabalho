@@ -108,10 +108,15 @@ public class MatriculasController {
 	 
 	
 	@GetMapping("{id}")
-	public  ResponseEntity<GetMatriculaDTO> consultarUmaMatricula(@PathVariable("id") UUID id){
-		return ResponseEntity.status(HttpStatus.OK).body(matriculaService.consultarUmaMatricula(id));
-
+	public ResponseEntity<GetMatriculaDTO> consultarUmaMatricula(@PathVariable UUID id) {
+	    try {
+	        GetMatriculaDTO matricula = matriculaService.consultarUmaMatricula(id);
+	        return ResponseEntity.ok(matricula);
+	    } catch (RuntimeException e) {
+	        return ResponseEntity.notFound().build();
+	    }
 	}
+
 
 
 	@DeleteMapping("{id}")

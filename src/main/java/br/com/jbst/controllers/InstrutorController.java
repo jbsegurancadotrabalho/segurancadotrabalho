@@ -83,4 +83,26 @@ public class InstrutorController {
 					.body(instrutorService.excluirInstrutor(id));
 
 	}
+	
+	@PutMapping(value = "incluir-proficiencia", consumes = { "multipart/form-data" })
+	public ResponseEntity<GetInstrutorDTOs> incluirProficiencia(
+	        @RequestParam("id") UUID id,
+	        @RequestParam("proficiencia") MultipartFile proficiencia) throws Exception {
+
+	    // capturando o tipo do arquivo
+	    String tipo = proficiencia.getContentType();
+
+	    // verificando se o formato é válido (PDF, JPG, JPEG, PNG, etc)
+	    if (tipo.equals("application/pdf") || tipo.equals("image/jpg") || tipo.equals("image/jpeg") || tipo.equals("image/png")) {
+
+	        // atualizando o campo de proficiência
+	        GetInstrutorDTOs result = instrutorService.incluirProficiencia(id, proficiencia.getBytes());
+	        return ResponseEntity.status(HttpStatus.OK).body(result);
+
+	    } else {
+	        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+	    }
+	}
+
+
 }

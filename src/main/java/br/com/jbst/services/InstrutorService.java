@@ -1,9 +1,9 @@
 package br.com.jbst.services;
 import java.time.Instant;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.modelmapper.ModelMapper;
 import org.modelmapper.TypeToken;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,8 +11,12 @@ import org.springframework.stereotype.Service;
 
 import br.com.jbst.DTO.GetInstrutorDTO;
 import br.com.jbst.DTO.GetInstrutorDTOs;
+import br.com.jbst.DTO.MailSenderDto;
 import br.com.jbst.DTO.PostInstrutorDTO;
 import br.com.jbst.DTO.PutInstrutorDTO;
+import br.com.jbst.DTO.SendMessageZapDTO;
+import br.com.jbst.components.MailSenderComponent;
+import br.com.jbst.components.ZApiSenderComponent;
 import br.com.jbst.entities.Instrutor;
 import br.com.jbst.repositories.FormacaoRepository;
 import br.com.jbst.repositories.InstrutorRepository;
@@ -21,14 +25,15 @@ import br.com.jbst.repositories.InstrutorRepository;
 @Service
 public class InstrutorService {
 
-    @Autowired
-    InstrutorRepository instrutorRepository;
+    @Autowired  InstrutorRepository instrutorRepository;
  
-    @Autowired
-    FormacaoRepository formacaoRepository;
+    @Autowired FormacaoRepository formacaoRepository;
     
-    @Autowired
-    ModelMapper modelMapper;
+    @Autowired ModelMapper modelMapper;
+    
+    @Autowired private ZApiSenderComponent zApiSenderComponent;
+
+    @Autowired  private MailSenderComponent mailSenderComponent;
     
     public GetInstrutorDTO criarInstrutor(PostInstrutorDTO dto) throws Exception {
         // Verifica se o instrutor já foi registrado
@@ -42,6 +47,7 @@ public class InstrutorService {
         instrutor.setIdinstrutor(UUID.randomUUID());
         instrutor.setDataHoraCriacao(Instant.now());
         instrutorRepository.save(instrutor);
+        enviarMensagemInstrutor(instrutor);
         return modelMapper.map(instrutor, GetInstrutorDTO.class);
     }
 
@@ -62,6 +68,8 @@ public class InstrutorService {
         registro.setDataHoraCriacao(Instant.now());
 
 	    instrutorRepository.save(registro);
+	    enviarMensagemInstrutor(registro);
+
 		return modelMapper.map(registro, GetInstrutorDTO.class);
 	}
     
@@ -108,11 +116,81 @@ public GetInstrutorDTOs incluirAssinatura(UUID id, byte[] assinatura) throws Exc
 
 	// salvando no banco de dados
 	instrutorRepository.save(instrutor);
+	enviarMensagemInstrutor(instrutor);
 
 	// copiar os dados do Instrutor para o DTO de resposta
 	// e retornar os dados (GetInstrutorDTOs)
 	return modelMapper.map(instrutor, GetInstrutorDTOs.class);
 }
+
+public GetInstrutorDTOs incluirProficiencia(UUID id, byte[] proficiencia) throws Exception {
+    // Verificando se o instrutor existe
+    Optional<Instrutor> registro = instrutorRepository.findById(id);
+    if (registro.isEmpty())
+        throw new IllegalArgumentException("Instrutor inválido: " + id);
+
+    // Capturando o instrutor
+    Instrutor instrutor = registro.get();
+
+    // Definindo o campo de proficiência
+    instrutor.setProficiencia(proficiencia);
+
+    // Salvando no banco de dados
+    instrutorRepository.save(instrutor);
+
+    // Retornando o DTO com os dados atualizados
+    return modelMapper.map(instrutor, GetInstrutorDTOs.class);
+}
+
+public void enviarMensagemInstrutor(Instrutor instrutor) {
+    if (instrutor != null && instrutor.getTelefone_1() != null) {
+        String numero = instrutor.getTelefone_1().replaceAll("[^0-9]", "");
+        if (!numero.startsWith("55")) {
+            numero = "55" + numero;
+        }
+
+        String linkAssinatura = "http://jbseguranca.s3-website.us-east-2.amazonaws.com/incluir-assinatura-instrutor/" + instrutor.getIdinstrutor();
+
+        String mensagem = String.format("""
+            Olá %s!
+
+            Você foi registrado como Instrutor na plataforma da JB Segurança do Trabalho.
+
+            📄 Dados do Instrutor:
+            📝 Nome: %s
+            🆔 CPF: %s
+            📞 Telefone 1: %s
+            📞 Telefone 2: %s
+            📧 E-mail: %s
+
+            🖋️ Realize sua assinatura digital no link abaixo:
+            %s
+
+            Seja bem-vindo(a) ao nosso time!
+            """,
+            instrutor.getInstrutor(),
+            instrutor.getInstrutor(),
+            instrutor.getCpf() != null ? instrutor.getCpf() : "Não informado",
+            instrutor.getTelefone_1(),
+            instrutor.getTelefone_2() != null ? instrutor.getTelefone_2() : "Não informado",
+            instrutor.getEmail() != null ? instrutor.getEmail() : "Não informado",
+            linkAssinatura
+        ).trim();
+
+        // Envio para WhatsApp
+        zApiSenderComponent.sendMessage(new SendMessageZapDTO(numero, mensagem));
+
+        // Envio para E-mail se disponível
+        if (instrutor.getEmail() != null && !instrutor.getEmail().isBlank()) {
+            MailSenderDto emailDto = new MailSenderDto();
+            emailDto.setMailTo(instrutor.getEmail());
+            emailDto.setSubject("Confirmação de Cadastro - JB Segurança do Trabalho");
+            emailDto.setBody(mensagem.replace("\n", "<br>")); // HTML para e-mail
+            mailSenderComponent.sendMessage(emailDto);
+        }
+    }
+}
+
 }
 
 

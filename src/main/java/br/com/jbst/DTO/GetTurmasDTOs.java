@@ -1,17 +1,19 @@
 package br.com.jbst.DTO;
 
 import java.time.Instant;
-
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
+import br.com.jbst.config.InstantSerializer;
 import lombok.Data;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import br.com.jbst.config.InstantSerializer;
 
 @Data
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "idTurmas")
 public class GetTurmasDTOs {
 
 	private UUID idTurmas;
@@ -45,6 +47,7 @@ public class GetTurmasDTOs {
 	private String quartodia;
 	private String quintodia;
 	private String observacoes;
+    private List<GetAssinaturaInstrutorDTO> assinaturasInstrutores;
 	private GetCursoDTO curso;
 	private GetUnidadeDeTreinamentoDTO unidadeDeTreinamento;
 	private List<GetInstrutorDTO> instrutores;
